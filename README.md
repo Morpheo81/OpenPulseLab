@@ -54,7 +54,7 @@ While not a medical tool, this project has several fascinating applications:
 To build your prototipe device, you will need:
 
 
-![Board](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Proto 1_0.jpg)
+![Board](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Proto_1_0.jpg)
 
 
 * **Components: for Rev 1.0**
@@ -81,7 +81,7 @@ To build your prototipe device, you will need:
     * **AD8232 module with electrode.**
     * Serial programmer.
  
-![Programming](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Programming Proto 1_0.jpg)
+![Programming](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Programming_Proto_1_0.jpg)
 
 * **Firmware & Libraries:**
     * `ECG_ESP8266.ino` firmware file
