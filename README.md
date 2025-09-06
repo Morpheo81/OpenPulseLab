@@ -25,7 +25,7 @@ This project is provided "as is," without any warranty of any kind, either expre
 
 ### About the Project
 
-[cite_start]This project leverages an **ESP8266 microcontroller** to create a simple, Wi-Fi enabled ECG monitor[cite: 2]. [cite_start]It processes the analog signals from an **AD8232 ECG sensor module** and serves a web page via an on-board web server[cite: 2]. [cite_start]Users can access this page from any web browser to view real-time heart data and save it[cite: 2]. [cite_start]The device also includes hardware for **lead-off detection** and a **buzzer/LED** for error signaling[cite: 2].
+This project leverages an **ESP8266 microcontroller** to create a simple, Wi-Fi enabled ECG monitor. It processes the analog signals from an **AD8232 ECG sensor module** and serves a web page via an on-board web server. Users can access this page from any web browser to view real-time heart data and save it. The device also includes hardware for **lead-off detection** and a **buzzer/LED** for error signaling.
 
 * **Open and Accessible:** All hardware schematics, firmware, and documentation are provided.
 * **Low-Cost:** Built with readily available and inexpensive components.
@@ -33,10 +33,10 @@ This project is provided "as is," without any warranty of any kind, either expre
 
 ### How It Works
 
-1.  [cite_start]**Signal Acquisition:** The AD8232 sensor module captures the electrical signals of the heart[cite: 2].
-2.  [cite_start]**Signal Conversion:** The ESP8266's analog-to-digital converter (ADC) reads the output from the AD8232[cite: 2].
-3.  [cite_start]**Data Transmission:** The ESP8266 acts as a web server, broadcasting the raw data via Wi-Fi and using **WebSockets** for real-time streaming[cite: 2].
-4.  [cite_start]**Data Visualization:** A simple HTML/JavaScript front-end displays the data on a graph in a web browser[cite: 2]. [cite_start]A software filter (median on X, moving average on Y) is applied to smooth the raw data[cite: 2].
+1.  **Signal Acquisition:** The AD8232 sensor module captures the electrical signals of the heart.
+2.  **Signal Conversion:** The ESP8266's analog-to-digital converter (ADC) reads the output from the AD8232.
+3.  **Data Transmission:** The ESP8266 acts as a web server, broadcasting the raw data via Wi-Fi and using **WebSockets** for real-time streaming.
+4.  **Data Visualization:** A simple HTML/JavaScript front-end displays the data on a graph in a web browser. A software filter (median on X, moving average on Y) is applied to smooth the raw data.
 
 ### Potential Applications
 
@@ -50,42 +50,34 @@ While not a medical tool, this project has several fascinating applications:
 
 To build your own device, you will need:
 
-* **Components:**
-    * [cite_start]Buzzer (BZ1) [cite: 1]
-    * [cite_start]2 0.1uF capacitors (C1, C3) [cite: 1]
-    * [cite_start]1 100uF capacitor (C2) [cite: 1]
-    * [cite_start]1 capacitor (C5) [cite: 1]
-    * [cite_start]2 diodes (D1, D2) [cite: 1]
-    * [cite_start]3 PinSocket 1x06 (J2, J3) and 1x02 (J1) connectors [cite: 1]
-    * [cite_start]1 Molex 1x02 connector (J4) [cite: 1]
-    * [cite_start]1 LED for error (LED1) [cite: 1]
-    * [cite_start]1 LED for power (LED2) [cite: 1]
-    * [cite_start]2 10K resistors (R1, R6) [cite: 1]
-    * [cite_start]1 1K resistor (R2) [cite: 1]
-    * [cite_start]3 22K resistors (R3, R4, R5) [cite: 1]
-    * [cite_start]3 100 resistors (R8, R9, R10) [cite: 1]
-    * [cite_start]1 SW_Push button (SW1) [cite: 1]
-    * [cite_start]1 SW_DIP_x01 switch (SW2) [cite: 1]
-    * [cite_start]4 test points (TP1, TP2, TP3, TP4) [cite: 1]
-    * [cite_start]ESP-12F WiFi module (U1) [cite: 1]
+* **Components: for Rev 1.0**
+    * Buzzer (BZ1) - not mandatory
+    * 0.1uF capacitors (C1, C3)
+    * 100uF capacitor (C2)
+    * capacitor (C5)
+    * diodes (D1, D2)
+    * PinSocket 1x06 (J2, J3) and 1x02 (J1) connectors
+    * Molex 1x02 connector (J4)
+    * LED for error (LED1)
+    * LED for power (LED2)
+    * 10K resistors (R1, R6)
+    * 1K resistor (R2)
+    * 22K resistors (R3, R4, R5)
+    * 100 resistors (R8, R9, R10)
+    * SW_Push button (SW1)
+    * SW_DIP_x01 switch (SW2)
+    * test points (TP1, TP2, TP3, TP4)
+    * ESP-12F WiFi module (U1)
+ NOTE: SMD resistor and ceramic capacitor are 0805
 * **Tools:**
     * Soldering iron and soldering materials.
 * **Firmware & Libraries:**
-    * [cite_start]`ECG_ESP8266.ino` firmware file [cite: 2]
-    * [cite_start]Arduino Libraries: `ESP8266WiFi`, `ESP8266WebServer`, `WebSocketsServer` by Markus Sattler, `ArduinoJson` [cite: 2]
+    * `ECG_ESP8266.ino` firmware file
+    * Arduino Libraries: `ESP8266WiFi`, `ESP8266WebServer`, `WebSocketsServer` by Markus Sattler, `ArduinoJson`
 * **Files:**
-    * The Bill of Materials (BOM) is in `ECG_ESP8266_BOM.csv`.
-    * The firmware files are in the `firmware/` folder.
+    * The hardware files are in the `KiCad` folder.
+    * The firmware files are in the `ArduinoIDE` folder.
 
-### How to Contribute
-
-Your contributions are highly welcome! We're looking for help in several areas:
-* **Firmware:** Optimizing the code, improving data acquisition, and adding new features.
-* **Software:** Creating more advanced visualization tools, improving the web interface, or building a dedicated application.
-* **Hardware:** Improving the PCB design for better signal quality or different form factors.
-* **Documentation:** Expanding the guides and tutorials to make the project even more accessible.
-
-Please check the [CONTRIBUTING.md](CONTRIBUTING.md) file for more details.
 
 ### Licensing
 
