@@ -1,7 +1,7 @@
 # OpenPulseLab
 A Low-Cost, Open-Source ECG Monitor for educational and research uses
 
-![ECG ESP8266](https://github.com/Morpheo81/OpenPulseLab/edit/main/ECG_ESP8266.jpg?raw=true)
+![ECG ESP8266](https://github.com/Morpheo81/OpenPulseLab/edit/main/ECG_ESP8266_B.jpg?raw=true)
 
 ---
 
