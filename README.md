@@ -38,6 +38,9 @@ This project leverages an **ESP8266 microcontroller** to create a simple, Wi-Fi 
 3.  **Data Transmission:** The ESP8266 acts as a web server, broadcasting the raw data via Wi-Fi and using **WebSockets** for real-time streaming.
 4.  **Data Visualization:** A simple HTML/JavaScript front-end displays the data on a graph in a web browser. A software filter (median on X, moving average on Y) is applied to smooth the raw data.
 
+**Here an example of the Web Server running on ESP8266**
+![WebServer](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/WebServer.jpg?raw=true)
+
 ### Potential Applications
 
 While not a medical tool, this project has several fascinating applications:
@@ -48,7 +51,11 @@ While not a medical tool, this project has several fascinating applications:
 
 ### Getting Started
 
-To build your own device, you will need:
+To build your prototipe device, you will need:
+
+
+![Board](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Proto 1_0.jpg)
+
 
 * **Components: for Rev 1.0**
     * Buzzer (BZ1) - not mandatory
@@ -71,6 +78,11 @@ To build your own device, you will need:
  NOTE: SMD resistor and ceramic capacitor are 0805
 * **Tools:**
     * Soldering iron and soldering materials.
+    * **AD8232 module with electrode.**
+    * Serial programmer.
+ 
+![Programming](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Programming Proto 1_0.jpg)
+
 * **Firmware & Libraries:**
     * `ECG_ESP8266.ino` firmware file
     * Arduino Libraries: `ESP8266WiFi`, `ESP8266WebServer`, `WebSocketsServer` by Markus Sattler, `ArduinoJson`
