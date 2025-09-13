@@ -90,6 +90,10 @@ To build your prototipe device, you will need:
     * The hardware files are in the `KiCad` folder.
     * The firmware files are in the `ArduinoIDE` folder.
 
+### Electrodes position example
+
+
+<img src="https://github.com/Morpheo81/OpenPulseLab/blob/main/img/Electrodes.jpg" alt="descrizione" width="200" height="300"/>
 
 ### Licensing
 
