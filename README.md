@@ -90,10 +90,16 @@ To build your prototipe device, you will need:
     * The hardware files are in the `KiCad` folder.
     * The firmware files are in the `ArduinoIDE` folder.
 
-### Electrodes position example
+### Example of Electrode Placement and Important Notes
 
 
 <img src="https://github.com/Morpheo81/OpenPulseLab/blob/main/img/Electrodes.jpg" alt="descrizione" width="200" height="300"/>
+
+This device uses TENS/EMS (Transcutaneous Electrical Nerve Stimulation / Electrical Muscle Stimulation) electrodes instead of traditional, single-use ECG electrodes. While standard ECG electrodes are specifically designed for low impedance and optimal signal fidelity, they are often expensive and intended for single use due to their hydrogel-based adhesive.
+
+Our choice to use TENS/EMS pads is a deliberate design decision to prioritize reusability and user convenience. These pads, commonly used for muscle stimulation, have a more durable adhesive, allowing for multiple uses before replacement. This makes the OpenPulseLab device more cost-effective and accessible, particularly for educational and hobbyist purposes.
+
+It's important to note the technical trade-off involved. The impedance of TENS/EMS pads is typically higher than that of medical-grade ECG electrodes. This can result in a weaker signal from the AD8232 sensor. If you choose to use different types of electrodes, such as standard ECG electrodes, you may need to re-evaluate and adjust the amplification factors and any filtering thresholds within the firmware to achieve the best possible signal quality.
 
 ### Licensing
 
