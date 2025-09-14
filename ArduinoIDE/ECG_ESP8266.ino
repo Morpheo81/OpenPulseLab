@@ -108,7 +108,7 @@ const char* htmlPage = R"rawliteral(
 
   <div class="filter-controls">
       <label for="filterX">Filtro Mediana (X):</label>
-      <input type="number" id="filterX" value="1" min="1">
+      <input type="number" id="filterX" value="2" min="1">
       <label for="filterY">Filtro Media (Y):</label>
       <input type="number" id="filterY" value="1" min="1">
   </div>
@@ -465,7 +465,38 @@ void loop() {
 
   // Legge il valore analogico dal pin A0 (uscita dell'AD8232)
   int ecgValue = (analogRead(A0) + analogRead(A0))/2;
+  int temp_ECG[9];
   
+  
+  digitalWrite(LED_PIN, LOW);
+  int c1;
+  int c2;
+  int c3;
+  for(c1=0;c1<9;c1++) temp_ECG[c1] = 0;
+  for(c1=0;c1<9;c1++)
+  {
+    ecgValue = analogRead(A0);
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(1);
+    if(ecgValue>760){
+      digitalWrite(BUZZER_PIN, LOW);
+      digitalWrite(LED_PIN, HIGH);
+    }
+    for(c2=0;c2<9-1;c2++)
+    {    
+      if(ecgValue>temp_ECG[c2])
+      {
+        for(c3=c2;c3<9-1;c3++)
+        {
+          temp_ECG[c3+1]=temp_ECG[c3];
+        }
+        temp_ECG[c2] = ecgValue;
+        c2=1000;
+      }
+    }
+  }
+  ecgValue = temp_ECG[5];
+
 
   // Legge lo stato dei pin di Lead-Off Detection
   // L'AD8232 tipicamente invia HIGH (1) quando il lead è scollegato (problema),
@@ -486,20 +517,6 @@ void loop() {
   // Invia la stringa JSON a tutti i client WebSockets connessi
   webSocket.broadcastTXT(jsonString.c_str());
 
-  // Aggiungi un piccolo ritardo per controllare la frequenza di campionamento.
-  // Un delay di 10ms corrisponde a 100 campioni al secondo (100 Hz),
-  // il che deve corrispondere alla variabile 'samplesPerSecond' nel JavaScript.
-  int ciclo;
-  for(ciclo=0;ciclo<4;ciclo++) //Aggiunsto il numero di cicli per avere esattamente 30s
-  {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(1);
-    if(ecgValue>760){
-      digitalWrite(BUZZER_PIN, LOW);
-      digitalWrite(LED_PIN, HIGH);
-    } 
-    delay(1);
-  }
-  digitalWrite(LED_PIN, LOW);
-
+ 
+ delay(1);
 }
