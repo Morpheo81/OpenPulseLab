@@ -37,7 +37,7 @@ const char* htmlPage = R"rawliteral(
   <style>
     body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
     canvas { border: 1px solid black; background-color: #f0f0f0; }
-    h1 { color: #333; }
+    h1, h2 { color: #333; }
     p { font-size: 1.2em; color: #555; }
     button {
       padding: 10px 20px;
@@ -77,27 +77,33 @@ const char* htmlPage = R"rawliteral(
       background-color: red; /* Acceso */
     }
     .filter-controls {
-        margin-top: 20px;
-        background-color: #eee;
-        padding: 15px;
-        border-radius: 8px;
-        display: inline-block;
+      margin-top: 20px;
+      background-color: #eee;
+      padding: 15px;
+      border-radius: 8px;
+      display: inline-block;
     }
     .filter-controls label {
-        margin-right: 10px;
-        font-weight: bold;
+      margin-right: 10px;
+      font-weight: bold;
     }
     .filter-controls input[type="number"] {
-        width: 60px;
-        padding: 5px;
-        border-radius: 4px;
-        border: 1px solid #ccc;
+      width: 60px;
+      padding: 5px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
   <h1>ECG Live Stream</h1>
+
+  <h2>Dettaglio Picco QRS (Media)</h2>
+  <canvas id="ecgZoomCanvas" width="800" height="300"></canvas>
+
+  <h2>Grafico Completo (30s)</h2>
   <canvas id="ecgCanvas" width="800" height="300"></canvas>
+
   <p>Valore Attuale ADC (Grezzo): <span id="currentRawValue">--</span></p>
   <p>Valore Attuale ADC (Filtrato): <span id="currentFilteredValue">--</span></p>
   
@@ -118,19 +124,34 @@ const char* htmlPage = R"rawliteral(
 
   <script>
     var ws;
+    // Grafico principale (30s)
     var canvas = document.getElementById('ecgCanvas');
     var ctx = canvas.getContext('2d');
-    var dataBuffer = []; // Buffer per i dati grezzi ricevuti (per filtro e grafico)
-    var filteredData = []; // Buffer per i dati filtrati visualizzati nel grafico
+    // Grafico di zoom (media)
+    var zoomCanvas = document.getElementById('ecgZoomCanvas');
+    var zoomCtx = zoomCanvas.getContext('2d');
+
+    var dataBuffer = [];
+    var filteredData = [];
+    var peakBuffer = [];
+    var peakLocations = []; 
 
     // --- Configurazione Tempo e Campionamento ---
-    var desiredDurationSeconds = 30; // Durata dei dati da mantenere (30 secondi)
-    var samplesPerSecond = 100; // Frequenza di campionamento (campioni al secondo) - DEVE CORRISPONDERE AL DELAY LATO ESP!
-    var maxDataPoints = desiredDurationSeconds * samplesPerSecond; // Numero massimo di punti da mantenere nell'array
+    var desiredDurationSeconds = 30;
+    var samplesPerSecond = 100;
+    var maxDataPoints = desiredDurationSeconds * samplesPerSecond;
+    
+    // --- Configurazione Grafico di Zoom (Media) ---
+    var beatDurationMs = 700; // Durata stimata di un battito in ms
+    var zoomMaxDataPoints = Math.ceil((beatDurationMs / 1000) * samplesPerSecond);
+    var lastPeakTime = 0; 
+    const peakDetectionIntervalMs = 500;
+    const beatsToAverage = 10; // Numero di battiti da mediare
 
     // --- Parametri di Visualizzazione del Grafico ---
-    var scaleFactor = 0.2; // Fattore di scala per i dati (regola in base ai valori ADC 0-1023)
-    var yOffset = canvas.height / 2; // Centro del grafico (per il segnale centrato)
+    var scaleFactor = 0.2;
+    var yOffset = canvas.height / 2;
+    var zoomYOffset = zoomCanvas.height / 2;
 
     // --- Elementi Indicatori Lead-Off ---
     var loPlusIndicator = document.getElementById('loPlusIndicator');
@@ -142,31 +163,26 @@ const char* htmlPage = R"rawliteral(
     var filterX = parseInt(filterXInput.value);
     var filterY = parseInt(filterYInput.value);
 
-    // Event Listeners per i cambiamenti dei valori del filtro
     filterXInput.addEventListener('change', function() {
         filterX = parseInt(this.value);
-        if (filterX < 1) filterX = 1; // Minimo 1
+        if (filterX < 1) filterX = 1;
         this.value = filterX;
-        clearECGData(); // Reset dei dati filtrati quando i parametri cambiano
+        clearECGData();
     });
     filterYInput.addEventListener('change', function() {
         filterY = parseInt(this.value);
-        if (filterY < 1) filterY = 1; // Minimo 1
+        if (filterY < 1) filterY = 1;
         this.value = filterY;
-        clearECGData(); // Reset dei dati filtrati quando i parametri cambiano
+        clearECGData();
     });
 
-
-    // --- Funzione per Connettersi al WebSocket ---
     function connectWebSocket() {
       ws = new WebSocket('ws://' + location.hostname + ':81/');
-
       ws.onopen = function() {
         console.log('WebSocket Connesso!');
       };
 
       ws.onmessage = function(event) {
-        // I dati arrivano come stringa JSON: {"ecg": 512, "lo_plus": 0, "lo_minus": 0}
         try {
           var dataPacket = JSON.parse(event.data);
           var rawValue = dataPacket.ecg;
@@ -176,14 +192,10 @@ const char* htmlPage = R"rawliteral(
           if (!isNaN(rawValue)) {
             document.getElementById('currentRawValue').innerText = rawValue;
             
-            // --- AGGIORNAMENTO STATI LEAD-OFF ---
-            // L'AD8232 in modalità DC Lead-off con OUTPUT_HIGH_WHEN_NO_LEAD
-            // invia HIGH (1) quando il lead è scollegato, LOW (0) quando è connesso.
-            // Se la tua implementazione o modulo è diverso, inverti la logica qui.
-            if (loPlus === 1) { // 1 = problema (Lead Off), 0 = OK
-              loPlusIndicator.classList.add('active'); // Accende la spia rossa
+            if (loPlus === 1) {
+              loPlusIndicator.classList.add('active');
             } else {
-              loPlusIndicator.classList.remove('active'); // Spegne la spia
+              loPlusIndicator.classList.remove('active');
             }
             if (loMinus === 1) {
               loMinusIndicator.classList.add('active');
@@ -191,30 +203,23 @@ const char* htmlPage = R"rawliteral(
               loMinusIndicator.classList.remove('active');
             }
 
-            dataBuffer.push(rawValue); // Aggiungi il valore grezzo al buffer
-            // Mantiene il buffer dei dati grezzi limitato (per il filtro)
+            dataBuffer.push(rawValue);
             if (dataBuffer.length > maxDataPoints) { 
               dataBuffer.shift(); 
             }
             
-            // --- FILTRAGGIO SOFTWARE (Mediana su X, Media su Y) ---
             let filteredVal = filterData(dataBuffer, filterX, filterY);
             if (filteredVal !== null) {
-                document.getElementById('currentFilteredValue').innerText = filteredVal.toFixed(0); // Mostra il valore filtrato
-                
-                // Mantiene il buffer dei dati filtrati limitato
-                // Questo buffer viene utilizzato per la visualizzazione e il salvataggio
-                filteredData.push(filteredVal);
-                if (filteredData.length > maxDataPoints) {
-                    filteredData.shift();
-                }
-                
-                drawGraph(filteredData); // Disegna il grafico con i dati filtrati
-            } else {
-                // Se non ci sono abbastanza dati per il filtro (inizio sessione),
-                // puoi scegliere di non disegnare nulla o disegnare il grezzo
-                // Per ora, non disegniamo nulla finché non ci sono abbastanza dati filtrati
-                // drawGraph(dataBuffer); // Opzionale: disegna il grezzo all'inizio
+              document.getElementById('currentFilteredValue').innerText = filteredVal.toFixed(0);
+              
+              filteredData.push(filteredVal);
+              if (filteredData.length > maxDataPoints) {
+                filteredData.shift();
+              }
+              
+              detectAndAveragePeaks(filteredVal);
+              drawGraph(filteredData);
+              drawZoomGraph(peakBuffer);
             }
           }
         } catch (e) {
@@ -224,7 +229,7 @@ const char* htmlPage = R"rawliteral(
 
       ws.onclose = function() {
         console.log('WebSocket Disconnesso, tento di riconnettermi...');
-        setTimeout(connectWebSocket, 3000); // Tenta di riconnettersi dopo 3 secondi
+        setTimeout(connectWebSocket, 3000);
       };
 
       ws.onerror = function(error) {
@@ -232,150 +237,203 @@ const char* htmlPage = R"rawliteral(
       };
     }
 
-    // --- Funzione per il Filtraggio (Mediana su X, Media su Y) ---
-    // Questa funzione calcola un singolo punto filtrato per ogni nuovo dato grezzo
-    // Combinando un filtro mediana e un filtro media mobile.
-    function filterData(buffer, x, y) {
-        // La mediana richiede almeno X campioni
-        if (buffer.length < x) {
-            return null; // Non ci sono abbastanza dati per la mediana
+    function detectAndAveragePeaks(currentValue) {
+      const threshold = 700;
+      const now = Date.now();
+      
+      if (filteredData.length > 2) {
+        const last = filteredData[filteredData.length - 1];
+        const secondLast = filteredData[filteredData.length - 2];
+        
+        // Rileva un picco se il valore attuale è sopra la soglia e sta diminuendo (massimo locale)
+        // e se è passato abbastanza tempo dall'ultimo picco rilevato
+        if (last > threshold && last > secondLast && now - lastPeakTime > peakDetectionIntervalMs) {
+          peakLocations.push(filteredData.length - 1);
+          lastPeakTime = now;
+          
+          // Mantiene il buffer dei picchi con gli ultimi 11 picchi (per avere almeno 10 da mediare)
+          if (peakLocations.length > beatsToAverage + 1) {
+            peakLocations.shift();
+          }
+
+          if (peakLocations.length >= beatsToAverage) {
+            calculateAverageBeat();
+          }
+        }
+      }
+    }
+
+    function calculateAverageBeat() {
+        if (peakLocations.length < beatsToAverage) {
+            return;
         }
 
-        // 1. Applica il filtro Mediana sugli ultimi X valori grezzi
-        // Crea una copia temporanea degli ultimi X valori per non modificare l'originale
-        let medianWindow = [];
-        for(let i = 0; i < x; i++) {
-            medianWindow.push(buffer[buffer.length - x + i]);
-        }
-        medianWindow.sort((a, b) => a - b); // Ordina per trovare la mediana
+        let totalBeats = new Array(zoomMaxDataPoints).fill(0);
+        const halfBeatSamples = Math.floor(zoomMaxDataPoints / 2);
+        let validBeatsCount = 0;
 
-        let currentMedian;
-        if (medianWindow.length % 2 === 0) {
-            currentMedian = (medianWindow[medianWindow.length / 2 - 1] + medianWindow[medianWindow.length / 2]) / 2;
-        } else {
-            currentMedian = medianWindow[Math.floor(medianWindow.length / 2)];
-        }
-
-        // Se non ci sono ancora abbastanza dati filtrati per la media mobile su Y,
-        // restituisci solo la mediana corrente.
-        if (filteredData.length < y -1) { // -1 perché il currentMedian si aggiungerà
-             return currentMedian;
-        }
-
-        // 2. Applica il filtro Media (Media Mobile) sugli ultimi Y valori filtrati (inclusa la mediana corrente)
-        // Somma degli ultimi Y valori filtrati (compreso il valore medianato corrente, ma lo aggiungiamo dopo)
-        let sumFiltered = currentMedian; // Inizia con la mediana appena calcolata
-        for (let i = 0; i < y - 1; i++) { // Somma i precedenti (Y-1) valori già filtrati nel buffer
-            // Si assicura di non andare oltre l'inizio dell'array filteredData
-            if (filteredData.length - 1 - i >= 0) {
-                 sumFiltered += filteredData[filteredData.length - 1 - i];
-            } else {
-                // Se non ci sono abbastanza dati precedenti per la media su Y, usa la mediana
-                sumFiltered += currentMedian; // Ripete la mediana
+        for (let i = 0; i < beatsToAverage; i++) {
+            const peakIndex = peakLocations[peakLocations.length - 1 - i];
+            const startIndex = peakIndex - halfBeatSamples;
+            const endIndex = startIndex + zoomMaxDataPoints;
+            
+            if (startIndex >= 0 && endIndex < filteredData.length) {
+                const currentBeat = filteredData.slice(startIndex, endIndex);
+                for (let j = 0; j < zoomMaxDataPoints; j++) {
+                    totalBeats[j] += currentBeat[j];
+                }
+                validBeatsCount++;
             }
         }
         
-        return sumFiltered / y; // Ritorna il valore finalmente filtrato
+        if (validBeatsCount > 0) {
+            peakBuffer = totalBeats.map(val => val / validBeatsCount);
+        }
     }
 
+    function filterData(buffer, x, y) {
+      if (buffer.length < x) {
+          return null;
+      }
+      let medianWindow = [];
+      for(let i = 0; i < x; i++) {
+          medianWindow.push(buffer[buffer.length - x + i]);
+      }
+      medianWindow.sort((a, b) => a - b);
 
-    // --- Funzione per Disegnare il Grafico ECG sul Canvas ---
-    function drawGraph(dataToDraw) { // Accetta l'array di dati da disegnare
-      ctx.clearRect(0, 0, canvas.width, canvas.height); // Pulisci l'intero canvas
+      let currentMedian;
+      if (medianWindow.length % 2 === 0) {
+          currentMedian = (medianWindow[medianWindow.length / 2 - 1] + medianWindow[medianWindow.length / 2]) / 2;
+      } else {
+          currentMedian = medianWindow[Math.floor(medianWindow.length / 2)];
+      }
+
+      if (filteredData.length < y -1) {
+           return currentMedian;
+      }
+
+      let sumFiltered = currentMedian;
+      for (let i = 0; i < y - 1; i++) {
+          if (filteredData.length - 1 - i >= 0) {
+              sumFiltered += filteredData[filteredData.length - 1 - i];
+          } else {
+              sumFiltered += currentMedian;
+          }
+      }
       
-      // Disegna la linea centrale (riferimento, circa 1.65V per un ADC 0-1023)
-      ctx.strokeStyle = '#cccccc'; // Grigio chiaro
+      return sumFiltered / y;
+    }
+
+    function drawGraph(dataToDraw) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.strokeStyle = '#cccccc';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, yOffset);
       ctx.lineTo(canvas.width, yOffset);
       ctx.stroke();
 
-      // Disegna il segnale ECG
       ctx.beginPath();
       ctx.strokeStyle = 'blue';
       ctx.lineWidth = 2;
 
-      // Calcola l'incremento X per disegnare i punti distribuiti sulla larghezza del canvas
-      var xIncrement = canvas.width / maxDataPoints; 
+      var xIncrement = canvas.width / maxDataPoints;
 
       for (var i = 0; i < dataToDraw.length; i++) {
         var x = i * xIncrement;
-        // Normalizza e centra il valore ADC (0-1023) attorno all'offset Y del canvas
-        // 512 è il punto medio per un ADC a 10 bit (1023 max)
         var y = yOffset - (dataToDraw[i] - 512) * scaleFactor;
 
         if (i === 0) {
-          ctx.moveTo(x, y); // Inizia il percorso per il primo punto
+          ctx.moveTo(x, y);
         } else {
-          ctx.lineTo(x, y); // Continua il percorso per i punti successivi
+          ctx.lineTo(x, y);
         }
       }
-      ctx.stroke(); // Disegna la linea del grafico
+      ctx.stroke();
     }
 
-    // --- Funzione per Salvare i Dati ECG Attuali in un File CSV ---
+    function drawZoomGraph(dataToDraw) {
+      zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+      
+      zoomCtx.strokeStyle = '#cccccc';
+      zoomCtx.lineWidth = 1;
+      zoomCtx.beginPath();
+      zoomCtx.moveTo(0, zoomYOffset);
+      zoomCtx.lineTo(zoomCanvas.width, zoomYOffset);
+      zoomCtx.stroke();
+
+      zoomCtx.beginPath();
+      zoomCtx.strokeStyle = 'red';
+      zoomCtx.lineWidth = 2;
+
+      var xIncrement = zoomCanvas.width / zoomMaxDataPoints;
+
+      for (var i = 0; i < dataToDraw.length; i++) {
+        var x = i * xIncrement;
+        var y = zoomYOffset - (dataToDraw[i] - 512) * scaleFactor;
+
+        if (i === 0) {
+          zoomCtx.moveTo(x, y);
+        } else {
+          zoomCtx.lineTo(x, y);
+        }
+      }
+      zoomCtx.stroke();
+    }
+
     function saveECGData() {
-      if (filteredData.length === 0) { // Salviamo i dati filtrati
+      if (filteredData.length === 0) {
         alert("Nessun dato da salvare!");
         return;
       }
       
-      // Calcola l'intervallo di tempo per ogni campione
-      const sampleIntervalMs = 1000 / samplesPerSecond; // Millisecondi per campione
+      const sampleIntervalMs = 1000 / samplesPerSecond;
       
-      let csvContent = "Time_ms,ECG_Value\n"; // Nuova intestazione con colonna del tempo
+      let csvContent = "Time_ms,ECG_Value\n";
       
-      // Itera sui dati filtrati e aggiungi il tempo
       for (let i = 0; i < filteredData.length; i++) {
         const timeMs = i * sampleIntervalMs;
-        csvContent += `${timeMs},${filteredData[i].toFixed(0)}\n`; // .toFixed(0) per arrotondare i valori filtrati all'intero
+        csvContent += `${timeMs},${filteredData[i].toFixed(0)}\n`;
       }
       
-      // Crea un oggetto Blob (Binary Large Object)
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      
-      // Crea un URL temporaneo per il Blob
       const url = URL.createObjectURL(blob);
-      
-      // Crea un elemento <a> (link) nascosto
       const a = document.createElement('a');
       a.href = url;
       
-      // Imposta il nome del file suggerito
       const now = new Date();
       const filename = `ECG_data_with_time_${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}.csv`;
       a.download = filename;
       
-      // Aggiungi l'elemento al DOM, cliccalo, e poi rimuovilo
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       
-      // Rilascia l'URL del Blob
       URL.revokeObjectURL(url);
     }
 
-    // --- Funzione per Cancellare i Dati e Iniziare una Nuova Sessione ---
     function clearECGData() {
-      dataBuffer = []; // Svuota l'array dei dati grezzi
-      filteredData = []; // Svuota l'array dei dati filtrati
-      ctx.clearRect(0, 0, canvas.width, canvas.height); // Pulisci il canvas
-      drawGraph([]); // Ridiseegna il grafico (ora vuoto, con solo la linea centrale)
-      document.getElementById('currentRawValue').innerText = '--'; // Resetta i valori visualizzati
+      dataBuffer = [];
+      filteredData = [];
+      peakBuffer = [];
+      peakLocations = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+      drawGraph([]);
+      drawZoomGraph([]);
+      document.getElementById('currentRawValue').innerText = '--';
       document.getElementById('currentFilteredValue').innerText = '--';
       
-      // Spegni le spie Lead-Off
       loPlusIndicator.classList.remove('active');
       loMinusIndicator.classList.remove('active');
+      lastPeakTime = 0;
 
       console.log('Dati ECG cancellati. Nuova sessione avviata.');
     }
 
-    // --- Inizializzazione all'apertura della Pagina ---
     window.onload = function() {
-      connectWebSocket(); // Avvia la connessione WebSocket
-      // Collega le funzioni ai click dei rispettivi pulsanti
+      connectWebSocket();
       document.getElementById('saveDataBtn').addEventListener('click', saveECGData);
       document.getElementById('clearDataBtn').addEventListener('click', clearECGData); 
     };
@@ -456,6 +514,8 @@ void setup() {
   Serial.println("Pronto per lo streaming ECG.");
 }
 
+int ecgValue;
+
 // --- Funzione Loop (Eseguita continuamente dopo il setup) ---
 void loop() {
   // Gestisce le richieste del server HTTP (per servire la pagina web)
@@ -463,9 +523,60 @@ void loop() {
   // Gestisce gli eventi del server WebSockets (nuove connessioni, messaggi, ecc.)
   webSocket.loop();
 
+
+  // Legge lo stato dei pin di Lead-Off Detection
+  // L'AD8232 tipicamente invia HIGH (1) quando il lead è scollegato (problema),
+  // e LOW (0) quando è collegato (OK).
+  int loPlusStatus = digitalRead(LO_PLUS_PIN);
+  int loMinusStatus = digitalRead(LO_MINUS_PIN);
+int temp_ECG[9];
+digitalWrite(LED_PIN, LOW);
+  int c1;
+  int c2;
+  int c3;
+  for(c1=0;c1<5;c1++) temp_ECG[c1] = 0;
+  for(c1=0;c1<5;c1++)
+  {
+    ecgValue = analogRead(A0);
+    digitalWrite(BUZZER_PIN, HIGH);
+    if(ecgValue>760){
+      digitalWrite(BUZZER_PIN, LOW);
+      digitalWrite(LED_PIN, HIGH);
+    }
+    for(c2=0;c2<5-1;c2++)
+    {    
+      if(ecgValue>temp_ECG[c2])
+      {
+        for(c3=c2;c3<5-1;c3++)
+        {
+          temp_ECG[c3+1]=temp_ECG[c3];
+        }
+        temp_ECG[c2] = ecgValue;
+        c2=1000;
+      }
+    }
+  }
+  ecgValue = temp_ECG[3];
+
+delay(8);
+
+  // Prepara un oggetto JSON con i dati ECG e gli stati di Lead-Off
+  StaticJsonDocument<64> doc; // Dimensione adatta per un piccolo JSON (64 byte sono abbondanti)
+  doc["ecg"] = (ecgValue-512)*2;
+  doc["lo_plus"] = loPlusStatus;
+  doc["lo_minus"] = loMinusStatus;
+
+  // Serializza l'oggetto JSON in una stringa
+  String jsonString;
+  serializeJson(doc, jsonString);
+
+  // Invia la stringa JSON a tutti i client WebSockets connessi
+  webSocket.broadcastTXT(jsonString.c_str());
+
+
   // Legge il valore analogico dal pin A0 (uscita dell'AD8232)
-  int ecgValue = (analogRead(A0) + analogRead(A0))/2;
-  int temp_ECG[9];
+  //int ecgValue = (analogRead(A0) + analogRead(A0))/2;
+  /*int temp_ECG[9];
   
   
   digitalWrite(LED_PIN, LOW);
@@ -496,27 +607,10 @@ void loop() {
     }
   }
   ecgValue = temp_ECG[5];
+ */
 
 
-  // Legge lo stato dei pin di Lead-Off Detection
-  // L'AD8232 tipicamente invia HIGH (1) quando il lead è scollegato (problema),
-  // e LOW (0) quando è collegato (OK).
-  int loPlusStatus = digitalRead(LO_PLUS_PIN);
-  int loMinusStatus = digitalRead(LO_MINUS_PIN);
 
-  // Prepara un oggetto JSON con i dati ECG e gli stati di Lead-Off
-  StaticJsonDocument<64> doc; // Dimensione adatta per un piccolo JSON (64 byte sono abbondanti)
-  doc["ecg"] = ecgValue;
-  doc["lo_plus"] = loPlusStatus;
-  doc["lo_minus"] = loMinusStatus;
-
-  // Serializza l'oggetto JSON in una stringa
-  String jsonString;
-  serializeJson(doc, jsonString);
-
-  // Invia la stringa JSON a tutti i client WebSockets connessi
-  webSocket.broadcastTXT(jsonString.c_str());
-
- 
+ //Serial.println(ecgValue);
  delay(1);
 }
