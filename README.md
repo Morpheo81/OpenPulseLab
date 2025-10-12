@@ -84,11 +84,13 @@ To build your prototipe device, you will need:
 ![Programming](https://github.com/Morpheo81/OpenPulseLab/blob/main/proto/Programming_Proto_1_0.jpg)
 
 * **Firmware & Libraries:**
-    * `ECG_ESP8266.ino` firmware file
+    * `ECG_ESP8266.ino` firmware file example for the ECG - main topic
+    * `ECG_muscle_ESP8266.ino` firmware file example for use this platform to detect the activation of muscles
     * Arduino Libraries: `ESP8266WiFi`, `ESP8266WebServer`, `WebSocketsServer` by Markus Sattler, `ArduinoJson`
 * **Files:**
     * The hardware files are in the `KiCad` folder.
     * The firmware files are in the `ArduinoIDE` folder.
+    * The proto of the box is in the `FreeCAD` folder.
 
 ### Example of Electrode Placement and Important Notes
 
